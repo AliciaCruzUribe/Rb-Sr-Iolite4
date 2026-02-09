@@ -1,0 +1,38 @@
+{
+    "Properties": {
+        "File Path": "/Users/alicia.cruzuribe/Dropbox/iolite/Reference materials/F_Dartmoor.json",
+        "Locked": false,
+        "Matrix": "Feldspar",
+        "Name": "F_Dartmoor"
+    },
+    "Results": [
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "Age",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 1.2,
+            "Units": "Ma",
+            "Value": 284.1
+        },
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "87Sr/86Sr initial",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 0.00033,
+            "Units": "ratio",
+            "Value": 0.70942
+        }
+    ]
+}

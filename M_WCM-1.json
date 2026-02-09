@@ -1,0 +1,38 @@
+{
+    "Properties": {
+        "File Path": "/Users/alicia.cruzuribe/Dropbox/iolite/Reference materials/M_WCM-1.json",
+        "Locked": false,
+        "Matrix": "Muscovite",
+        "Name": "M_WCM-1"
+    },
+    "Results": [
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "Age",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 1,
+            "Units": "Ma",
+            "Value": 306
+        },
+        {
+            "LOD (Howell)": null,
+            "LOD (Longerich)": null,
+            "LOD (Pettke)": null,
+            "Name": "87Sr/86Sr initial",
+            "Num Finite": 0,
+            "Num Measurements": 0,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 0.0005,
+            "Units": "ratio",
+            "Value": 0.71
+        }
+    ]
+}

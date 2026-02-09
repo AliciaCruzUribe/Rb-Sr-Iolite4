@@ -1,0 +1,39 @@
+{
+    "Properties": {
+        "Description": "Mt Dromedary",
+        "File Path": "/Users/alicia.cruzuribe/Dropbox/iolite/Reference materials/B_Shap_copy.json",
+        "Locked": false,
+        "Matrix": "Biotite",
+        "Name": "B_MD4B"
+    },
+    "Results": [
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "Age",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 1.9,
+            "Units": "Ma",
+            "Value": 98.7
+        },
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "87Sr/86Sr initial",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 0.0017,
+            "Units": "ratio",
+            "Value": 0.7049
+        }
+    ]
+}

@@ -1,0 +1,39 @@
+{
+    "Properties": {
+        "Data Source": "Armbrustmacher et al. 1982",
+        "File Path": "/Users/alicia.cruzuribe/Dropbox/iolite/Reference materials/B_McClure.json",
+        "Locked": false,
+        "Matrix": "Biotite",
+        "Name": "B_McClure"
+    },
+    "Results": [
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "Age",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 5,
+            "Units": "Ma",
+            "Value": 535
+        },
+        {
+            "LOD (Howell)": 0,
+            "LOD (Longerich)": 0,
+            "LOD (Pettke)": 0,
+            "Name": "87Sr/86Sr initial",
+            "Num Finite": 1,
+            "Num Measurements": 1,
+            "Num Outliers": 0,
+            "Prop Uncertainty": "NULL",
+            "Total Uncertainty": "NULL",
+            "Uncertainty": 0.0002,
+            "Units": "ratio",
+            "Value": 0.7045
+        }
+    ]
+}
