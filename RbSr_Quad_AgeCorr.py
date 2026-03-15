@@ -3,7 +3,7 @@
 # / Authors: Cici and Iolite Software
 # / Description: A full Rb-Sr DRS that calculated correlated uncertainties and performs and age correction on the Rb/Sr ratio. Supports both SrF (+19 amu) and SrO/N2O (+16 amu) mass shift reactions.
 # / References: None
-# / Version: 1.0
+# / Version: 1.1
 # / Contact: support@iolite-software.com
 
 from iolite import QtGui
@@ -1169,10 +1169,20 @@ def runDRS():
     Rb87_Sr86s_Raw = Rb87_CPS/Sr86_102_CPS
     Sr87s_Rb87_Raw = Sr87_103_CPS/Rb87_CPS
     Sr88s_Sr86s_Raw = Sr88_104_CPS/Sr86_102_CPS
-    Beta = np.log(8.37520938/(Sr88_104_CPS/Sr86_102_CPS))/np.log(87.9056/85.9093)
-    Sr87m_Sr86m_Raw = Sr87_103_CPS/Sr86_102_CPS * pow(86.9089/85.9093, Beta)
-    Rb87_Sr86m_Raw = Rb87_CPS/Sr86_102_CPS * pow(86.9089/85.9093, Beta)
-    #Sr84m_Sr86m_Raw = Sr84F_CPS/Sr86_103_CPS * pow(83.9134/85.9093, Beta)
+
+    use_internal_norm = settings.get("UseInternalNorm", True)
+    if use_internal_norm:
+        # Apply internal mass-bias correction using 88Sr/86Sr Beta exponent
+        Beta = np.log(8.37520938/(Sr88_104_CPS/Sr86_102_CPS))/np.log(87.9056/85.9093)
+        Sr87m_Sr86m_Raw = Sr87_103_CPS/Sr86_102_CPS * pow(86.9089/85.9093, Beta)
+        Rb87_Sr86m_Raw = Rb87_CPS/Sr86_102_CPS * pow(86.9089/85.9093, Beta)
+        print("Internal normalisation (88Sr/86Sr Beta correction): ENABLED")
+    else:
+        # Skip internal normalisation - use the raw (shifted) ratios directly
+        Beta = np.ones_like(Sr88s_Sr86s_Raw) * np.nan  # Placeholder; not used downstream
+        Sr87m_Sr86m_Raw = Sr87s_Sr86s_Raw.copy()
+        Rb87_Sr86m_Raw = Rb87_Sr86s_Raw.copy()
+        print("Internal normalisation (88Sr/86Sr Beta correction): DISABLED - using raw ratios")
 
     # Gather up intermediate channels and add them as time series:
     int_channel_names = ['Rb87_CPS', 'Rb85_Sr86s_Raw', 'Sr87s_Sr86s_Raw',
@@ -1857,6 +1867,114 @@ def runDRS():
     else:
         print("\nNo age correction applied (SecondaryRMAge = 0 or not set)")
 
+    # =========================================================================
+    # Inverse isochron channels
+    # X = 87Rb/87Sr = (87Rb/86Sr) / (87Sr/86Sr)
+    # Y = 86Sr/87Sr = 1 / (87Sr/86Sr)
+    # Calculated for both StdCorr (always) and AgeCorr (when age correction applied)
+    # =========================================================================
+    print("\n=== Calculating Inverse Isochron Channels ===")
+
+    def calc_inverse_channels(rb_channel_name, sr_channel_name, rb_2se_channel_name, sr_2se_channel_name,
+                               out_prefix):
+        """
+        Compute inverse isochron ratio channels and their 2SE uncertainties.
+        Also computes per-selection rho for the inverse coordinates.
+
+        Returns channel arrays: rb87_sr87, rb87_sr87_2se, sr86_sr87, sr86_sr87_2se, rho_inv
+        or None if required channels are missing.
+        """
+        try:
+            rb_ts   = data.timeSeries(rb_channel_name)
+            sr_ts   = data.timeSeries(sr_channel_name)
+            rb2se_ts = data.timeSeries(rb_2se_channel_name)
+            sr2se_ts = data.timeSeries(sr_2se_channel_name)
+        except RuntimeError as e:
+            print(f"  Skipping {out_prefix}: could not find required channels ({e})")
+            return
+
+        rb   = rb_ts.data()
+        sr   = sr_ts.data()
+        rb2se = rb2se_ts.data()
+        sr2se = sr2se_ts.data()
+        t    = sr_ts.time()
+
+        # ---- ratio transforms ----
+        # Guard against divide-by-zero
+        sr_safe = np.where(np.abs(sr) > 1e-30, sr, np.nan)
+
+        Rb87_Sr87     = rb / sr_safe                  # (87Rb/86Sr) / (87Sr/86Sr)
+        Sr86_Sr87     = 1.0 / sr_safe                 # 1 / (87Sr/86Sr)
+
+        # ---- uncertainty propagation (2SE) ----
+        # Convert 2SE -> 1SE for propagation
+        sigma_rb = rb2se / 2.0
+        sigma_sr = sr2se / 2.0
+
+        # No correlation term assumed here (rho between rb and sr channels from
+        # the conventional isochron is calculated per-selection below and used for
+        # the inverse rho output; we use uncorrelated propagation for the 2SE values
+        # to stay conservative and consistent with what the isochron tool does when
+        # rho is not explicitly supplied).
+
+        # var(X_inv) = var(rb/sr) = (1/sr)^2 * var(rb) + (rb/sr^2)^2 * var(sr)
+        var_rb87_sr87 = (sigma_rb / sr_safe)**2 + (rb * sigma_sr / sr_safe**2)**2
+        sigma_rb87_sr87 = np.sqrt(np.maximum(var_rb87_sr87, 1e-60))
+        Rb87_Sr87_2SE = sigma_rb87_sr87 * 2.0
+
+        # var(Y_inv) = var(1/sr) = var(sr) / sr^4
+        var_sr86_sr87 = sigma_sr**2 / sr_safe**4
+        sigma_sr86_sr87 = np.sqrt(np.maximum(var_sr86_sr87, 1e-60))
+        Sr86_Sr87_2SE = sigma_sr86_sr87 * 2.0
+
+        # ---- per-selection rho for inverse coordinates ----
+        # cov(X_inv, Y_inv) = -rb * var(sr) / sr^4  (dominant cross-term, ignoring rb-sr cov)
+        # rho_inv = cov_inv / (sigma_x_inv * sigma_y_inv)
+        cov_inv = -rb * sigma_sr**2 / sr_safe**4
+        denom   = sigma_rb87_sr87 * sigma_sr86_sr87
+        rho_inv_pointwise = np.divide(cov_inv, denom,
+                                      out=np.zeros_like(cov_inv),
+                                      where=denom > 1e-60)
+        rho_inv_pointwise = np.clip(rho_inv_pointwise, -1.0, 1.0)
+
+        # Replace any remaining NaN/Inf with 0
+        for arr, name in [(Rb87_Sr87, 'Rb87_Sr87'), (Sr86_Sr87, 'Sr86_Sr87'),
+                          (Rb87_Sr87_2SE, 'Rb87_Sr87_2SE'), (Sr86_Sr87_2SE, 'Sr86_Sr87_2SE'),
+                          (rho_inv_pointwise, 'Rho_inv')]:
+            bad = ~np.isfinite(arr)
+            if np.any(bad):
+                print(f"  {out_prefix}: {np.sum(bad)} NaN/Inf in {name}, setting to 0")
+                arr[bad] = 0.0
+
+        # ---- create output channels ----
+        data.createTimeSeries(f'{out_prefix}_Rb87_Sr87',     data.Output, t, Rb87_Sr87)
+        data.createTimeSeries(f'{out_prefix}_Rb87_Sr87_2SE', data.Output, t, Rb87_Sr87_2SE)
+        data.createTimeSeries(f'{out_prefix}_Sr86_Sr87',     data.Output, t, Sr86_Sr87)
+        data.createTimeSeries(f'{out_prefix}_Sr86_Sr87_2SE', data.Output, t, Sr86_Sr87_2SE)
+        data.createTimeSeries(f'{out_prefix}_Rho_Rb87Sr87_Sr86Sr87', data.Output, t, rho_inv_pointwise)
+
+        print(f"  Created: {out_prefix}_Rb87_Sr87, _Rb87_Sr87_2SE, _Sr86_Sr87, _Sr86_Sr87_2SE, _Rho_Rb87Sr87_Sr86Sr87")
+
+    # Always calculate from StdCorr (mass-bias corrected) channels
+    calc_inverse_channels(
+        'StdCorr_Rb87_Sr86_MBC', 'StdCorr_Sr87_Sr86_MBC',
+        'StdCorr_Rb87_Sr86_2SE', 'StdCorr_Sr87_Sr86_2SE',
+        out_prefix='StdCorr'
+    )
+
+    # Also calculate from AgeCorr channels if they exist
+    try:
+        data.timeSeries('AgeCorr_Rb87_Sr86_MBC')
+        calc_inverse_channels(
+            'AgeCorr_Rb87_Sr86_MBC', 'StdCorr_Sr87_Sr86_MBC',
+            'AgeCorr_Rb87_Sr86_2SE', 'StdCorr_Sr87_Sr86_2SE',
+            out_prefix='AgeCorr'
+        )
+    except RuntimeError:
+        print("  AgeCorr channels not available, skipping AgeCorr inverse isochron channels")
+
+    print("Inverse isochron channels complete.")
+
     drs.message("Finished!")
     drs.progress(100)
     drs.finished()
@@ -1900,6 +2018,7 @@ def settingsWidget():
     drs.setSetting("UseCorrelatedErrors", False)
     drs.setSetting("RegressionModel", 0)  # 0=Model 1, 1=Model 2, 2=Model 3
     drs.setSetting("UseN2OMassShift", False)
+    drs.setSetting("UseInternalNorm", True)
     if rmNames:
         drs.setSetting("SecondaryRM", rmNames[0])
     else:
@@ -1934,6 +2053,16 @@ def settingsWidget():
     n2oCheckBox.setToolTip("Check this if using N2O reaction gas (SrO, +16 amu mass shift) instead of SF6 (SrF, +19 amu)")
     n2oCheckBox.toggled.connect(lambda t: drs.setSetting("UseN2OMassShift", bool(t)))
     formLayout.addRow("N₂O mass shift (+16)", n2oCheckBox)
+
+    # Internal normalisation (88Sr/86Sr) checkbox
+    internalNormCheckBox = QtGui.QCheckBox(leftWidget)
+    internalNormCheckBox.setChecked(settings.get("UseInternalNorm", True))
+    internalNormCheckBox.setToolTip(
+        "Apply internal mass-bias correction using the measured 88Sr/86Sr ratio (Beta exponent). "
+        "Uncheck to skip internal normalisation and use raw (non-mass-bias-corrected) ratios."
+    )
+    internalNormCheckBox.toggled.connect(lambda t: drs.setSetting("UseInternalNorm", bool(t)))
+    formLayout.addRow("Internal normalisation (88Sr/86Sr)", internalNormCheckBox)
 
     formLayout.addRow(QtGui.QLabel(""))  # Spacer
 
