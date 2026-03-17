@@ -3,7 +3,7 @@
 # / Authors: Cici and Iolite Software
 # / Description: A full Rb-Sr DRS that calculated correlated uncertainties and performs and age correction on the Rb/Sr ratio. Supports both SrF (+19 amu) and SrO/N2O (+16 amu) mass shift reactions.
 # / References: None
-# / Version: 1.1
+# / Version: 1.1.0
 # / Contact: support@iolite-software.com
 
 from iolite import QtGui
@@ -1149,39 +1149,56 @@ def runDRS():
 
     # Declare the channels used in the calculations:
     print("\nLooking up channels:")
-    Rb85_CPS = find_cps_channel('85', 'Rb85')
+    Rb85_CPS     = find_cps_channel('85',        'Rb85')
     Sr86_102_CPS = find_cps_channel(sr86_target, 'Sr86')
     Sr87_103_CPS = find_cps_channel(sr87_target, 'Sr87')
-    Sr88_104_CPS = find_cps_channel(sr88_target, 'Sr88')
+    Sr88_104_CPS = find_cps_channel(sr88_target, 'Sr88')  # May be None if channel not measured
 
-    # Check that all channels were found
-    if any(x is None for x in [Rb85_CPS, Sr86_102_CPS, Sr87_103_CPS, Sr88_104_CPS]):
-        IoLog.error("Missing required channels. Check that the correct mass shift is selected. "
-                    "Rb-Sr DRS cannot proceed.")
-        drs.message("Error: Missing channels. See Messages")
+    # Rb85, Sr86, and Sr87 are always required
+    if any(x is None for x in [Rb85_CPS, Sr86_102_CPS, Sr87_103_CPS]):
+        IoLog.error("Missing required channels (Rb85, Sr86, or Sr87). "
+                    "Check that the correct mass shift is selected. Rb-Sr DRS cannot proceed.")
+        drs.message("Error: Missing required channels. See Messages")
         drs.progress(100)
         drs.finished()
         return
 
-    Rb87_CPS = Rb85_CPS * 0.38571
-    Rb85_Sr86s_Raw = Rb85_CPS/Sr86_102_CPS
-    Sr87s_Sr86s_Raw = Sr87_103_CPS/Sr86_102_CPS
-    Rb87_Sr86s_Raw = Rb87_CPS/Sr86_102_CPS
-    Sr87s_Rb87_Raw = Sr87_103_CPS/Rb87_CPS
-    Sr88s_Sr86s_Raw = Sr88_104_CPS/Sr86_102_CPS
-
     use_internal_norm = settings.get("UseInternalNorm", True)
+
+    # Sr88 is only required when internal normalisation is enabled
+    if use_internal_norm and Sr88_104_CPS is None:
+        IoLog.error("Internal normalisation is enabled but the Sr88 channel (mass "
+                    + sr88_target + ") was not found. Either measure Sr88, or uncheck "
+                    "'Internal normalisation' in the DRS settings. Rb-Sr DRS cannot proceed.")
+        drs.message("Error: Sr88 channel missing for internal norm. See Messages")
+        drs.progress(100)
+        drs.finished()
+        return
+
+    Rb87_CPS        = Rb85_CPS * 0.38571
+    Rb85_Sr86s_Raw  = Rb85_CPS  / Sr86_102_CPS
+    Sr87s_Sr86s_Raw = Sr87_103_CPS / Sr86_102_CPS
+    Rb87_Sr86s_Raw  = Rb87_CPS  / Sr86_102_CPS
+    Sr87s_Rb87_Raw  = Sr87_103_CPS / Rb87_CPS
+
+    if Sr88_104_CPS is not None:
+        Sr88s_Sr86s_Raw = Sr88_104_CPS / Sr86_102_CPS
+    else:
+        # Sr88 not measured; fill with NaN so the intermediate channel still exists
+        Sr88s_Sr86s_Raw = np.full_like(Sr87s_Sr86s_Raw, np.nan)
+        print("  Sr88 channel not found - Sr88s_Sr86s_Raw will be NaN")
+
     if use_internal_norm:
         # Apply internal mass-bias correction using 88Sr/86Sr Beta exponent
-        Beta = np.log(8.37520938/(Sr88_104_CPS/Sr86_102_CPS))/np.log(87.9056/85.9093)
-        Sr87m_Sr86m_Raw = Sr87_103_CPS/Sr86_102_CPS * pow(86.9089/85.9093, Beta)
-        Rb87_Sr86m_Raw = Rb87_CPS/Sr86_102_CPS * pow(86.9089/85.9093, Beta)
+        Beta = np.log(8.37520938 / (Sr88_104_CPS / Sr86_102_CPS)) / np.log(87.9056 / 85.9093)
+        Sr87m_Sr86m_Raw = Sr87_103_CPS / Sr86_102_CPS * pow(86.9089 / 85.9093, Beta)
+        Rb87_Sr86m_Raw  = Rb87_CPS     / Sr86_102_CPS * pow(86.9089 / 85.9093, Beta)
         print("Internal normalisation (88Sr/86Sr Beta correction): ENABLED")
     else:
         # Skip internal normalisation - use the raw (shifted) ratios directly
-        Beta = np.ones_like(Sr88s_Sr86s_Raw) * np.nan  # Placeholder; not used downstream
+        Beta = np.full_like(Sr87s_Sr86s_Raw, np.nan)  # Placeholder; not used downstream
         Sr87m_Sr86m_Raw = Sr87s_Sr86s_Raw.copy()
-        Rb87_Sr86m_Raw = Rb87_Sr86s_Raw.copy()
+        Rb87_Sr86m_Raw  = Rb87_Sr86s_Raw.copy()
         print("Internal normalisation (88Sr/86Sr Beta correction): DISABLED - using raw ratios")
 
     # Gather up intermediate channels and add them as time series:
